@@ -18,6 +18,7 @@
 
 package org.apache.amoro.io.reader;
 
+import org.apache.amoro.data.DefaultKeyedFile;
 import org.apache.amoro.data.PrimaryKeyedFile;
 import org.apache.amoro.io.AuthenticatedFileIO;
 import org.apache.amoro.scan.KeyedTableScanTask;
@@ -38,6 +39,8 @@ import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.TypeUtil;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.util.StructProjection;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Map;
@@ -54,6 +57,8 @@ import java.util.function.Predicate;
  * @param <T> to indicate the record data type.
  */
 public abstract class AbstractMergeDataReader<T> extends AbstractKeyedDataReader<T> {
+
+  private static Logger LOG = LoggerFactory.getLogger(AbstractMergeDataReader.class);
 
   private ChangeDataMap<T> changeDataMap;
   // Reuse change data cache only for self-optimizing task
@@ -207,8 +212,16 @@ public abstract class AbstractMergeDataReader<T> extends AbstractKeyedDataReader
   private List<MixedFileScanTask> sortChangeFiles(List<MixedFileScanTask> changeTasks) {
     changeTasks.sort(
         (task1, task2) -> {
-          PrimaryKeyedFile file1 = task1.file();
           PrimaryKeyedFile file2 = task2.file();
+          PrimaryKeyedFile file1 = task1.file();
+          DefaultKeyedFile df1 = (DefaultKeyedFile) file1;
+          LOG.info("Path {}", df1.path());
+          LOG.info("Partition {}", df1.partition());
+          LOG.info("LowBounds {}", df1.lowerBounds());
+          LOG.info("UpBounds {}", df1.upperBounds());
+          LOG.info("Null Count {}", df1.nullValueCounts());
+          LOG.info("Value count {}", df1.valueCounts());
+          LOG.info("nan Count{}", df1.nanValueCounts());
           if (file1.transactionId().equals(file2.transactionId())) {
             Long offset1 =
                 Conversions.fromByteBuffer(

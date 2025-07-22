@@ -214,7 +214,8 @@ function build_amoro() {
 
   set -x
   cd "$PROJECT_HOME" || exit
-  docker build -t ${IMAGE_REF}:${IMAGE_TAG} \
+#  docker build -t ${IMAGE_REF}:${IMAGE_TAG} \
+  docker build -t  ecr.vip.ebayc3.com/rheos/amoro:0.9-SNAPSHOT \
     --build-arg MAVEN_MIRROR=$MAVEN_MIRROR \
     -f docker/amoro/Dockerfile .
   return $?

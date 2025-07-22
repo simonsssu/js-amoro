@@ -19,20 +19,18 @@
 package org.apache.amoro.optimizing.scan;
 
 import org.apache.amoro.iceberg.Constants;
+import org.apache.amoro.optimizing.scan.TableFileScanHelper.FileScanResult;
 import org.apache.amoro.shade.guava32.com.google.common.collect.Lists;
 import org.apache.amoro.utils.IcebergThreadPools;
 import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Table;
-import org.apache.iceberg.expressions.Expression;
-import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.io.CloseableIterable;
 
 import java.util.Map;
 
-public class IcebergTableFileScanHelper implements TableFileScanHelper {
+public class IcebergTableFileScanHelper extends AbstractTableFileScanHelper {
   private final Table table;
-  private Expression partitionFilter = Expressions.alwaysTrue();
   private final long snapshotId;
   private final Map<Integer, PartitionSpec> specs;
 
@@ -59,12 +57,6 @@ public class IcebergTableFileScanHelper implements TableFileScanHelper {
 
   protected FileScanResult buildFileScanResult(FileScanTask fileScanTask) {
     return new FileScanResult(fileScanTask.file(), Lists.newArrayList(fileScanTask.deletes()));
-  }
-
-  @Override
-  public TableFileScanHelper withPartitionFilter(Expression partitionFilter) {
-    this.partitionFilter = partitionFilter;
-    return this;
   }
 
   @Override

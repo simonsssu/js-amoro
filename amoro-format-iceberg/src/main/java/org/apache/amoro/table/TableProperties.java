@@ -75,6 +75,10 @@ public class TableProperties {
   public static final String SELF_OPTIMIZING_QUOTA = "self-optimizing.quota";
   public static final double SELF_OPTIMIZING_QUOTA_DEFAULT = 0.1;
 
+  public static final String SELF_OPTIMIZING_WITH_STATS_COLUMNS =
+      "self-optimizing.with-stats-columns";
+  public static final String SELF_OPTIMIZING_WITH_STATS_COLUMNS_DEFAULT = "*";
+
   public static final String SELF_OPTIMIZING_EXECUTE_RETRY_NUMBER =
       "self-optimizing.execute.num-retries";
   public static final int SELF_OPTIMIZING_EXECUTE_RETRY_NUMBER_DEFAULT = 5;

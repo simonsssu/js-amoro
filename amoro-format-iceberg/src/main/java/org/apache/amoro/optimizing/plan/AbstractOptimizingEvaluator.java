@@ -100,7 +100,7 @@ public abstract class AbstractOptimizingEvaluator {
                 mixedTable.asKeyedTable(), ((KeyedTableSnapshot) currentSnapshot));
       }
     }
-    tableFileScanHelper.withPartitionFilter(getPartitionFilter());
+    tableFileScanHelper.withPartitionFilter(getPartitionFilter()).returnColumnStats(true);
     initPartitionPlans(tableFileScanHelper);
     isInitialized = true;
     LOG.info(

@@ -25,6 +25,7 @@ import org.apache.iceberg.expressions.Expression;
 import org.apache.iceberg.io.CloseableIterable;
 
 import java.util.List;
+import java.util.Set;
 
 public interface TableFileScanHelper {
   class FileScanResult {
@@ -48,6 +49,10 @@ public interface TableFileScanHelper {
   CloseableIterable<FileScanResult> scan();
 
   TableFileScanHelper withPartitionFilter(Expression partitionFilter);
+
+  TableFileScanHelper withColumnsToKeepStats(Set<String> statsColumns);
+
+  TableFileScanHelper returnColumnStats(boolean returnColumnStats);
 
   PartitionSpec getSpec(int specId);
 }

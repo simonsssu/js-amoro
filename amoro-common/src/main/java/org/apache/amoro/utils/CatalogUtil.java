@@ -141,9 +141,11 @@ public class CatalogUtil {
           builder.withSimpleAuth(hadoopUsername);
         } else if (CatalogMetaProperties.AUTH_CONFIGS_VALUE_TYPE_KERBEROS.equalsIgnoreCase(
             authType)) {
-          String krb5 = authConfigs.get(CatalogMetaProperties.AUTH_CONFIGS_KEY_KRB5);
-          String keytab = authConfigs.get(CatalogMetaProperties.AUTH_CONFIGS_KEY_KEYTAB);
-          String principal = authConfigs.get(CatalogMetaProperties.AUTH_CONFIGS_KEY_PRINCIPAL);
+          String krb5 = authConfigs.getOrDefault(CatalogMetaProperties.AUTH_CONFIGS_KEY_KRB5, "");
+          String keytab =
+              authConfigs.getOrDefault(CatalogMetaProperties.AUTH_CONFIGS_KEY_KEYTAB, "");
+          String principal =
+              authConfigs.getOrDefault(CatalogMetaProperties.AUTH_CONFIGS_KEY_PRINCIPAL, "");
           builder.withBase64KrbAuth(keytab, krb5, principal);
         } else if (CatalogMetaProperties.AUTH_CONFIGS_VALUE_TYPE_AK_SK.equalsIgnoreCase(authType)) {
           String accessKey = authConfigs.get(CatalogMetaProperties.AUTH_CONFIGS_KEY_ACCESS_KEY);

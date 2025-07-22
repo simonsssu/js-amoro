@@ -25,6 +25,7 @@ import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
@@ -71,6 +72,15 @@ public class ChangeDataMap<T> implements Map<StructLike, T> {
     T newValue = value;
     if (oldValue != null) {
       newValue = mergeFunction.merge(oldValue, value);
+      System.out.println(
+          new Date()
+              + ": Merge ---->> \n"
+              + key
+              + " oldValue: "
+              + oldValue
+              + "\n newValue: "
+              + value);
+      System.out.println("\n");
     }
     changeMap.put(key, newValue);
     return oldValue;

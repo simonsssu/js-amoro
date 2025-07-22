@@ -24,6 +24,7 @@ import org.apache.amoro.optimizing.OptimizingExecutor;
 import org.apache.amoro.optimizing.OptimizingExecutorFactory;
 import org.apache.amoro.optimizing.OptimizingInputProperties;
 import org.apache.amoro.optimizing.TableOptimizing;
+import org.apache.amoro.shade.guava32.com.google.common.collect.Maps;
 import org.apache.amoro.shade.thrift.org.apache.thrift.TException;
 import org.apache.amoro.utils.ExceptionUtil;
 import org.apache.amoro.utils.SerializationUtil;
@@ -32,6 +33,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 public class OptimizerExecutor extends AbstractOptimizerOperator {
 
@@ -100,8 +102,12 @@ public class OptimizerExecutor extends AbstractOptimizerOperator {
     }
   }
 
+  protected ExecutorType executorType() {
+    return ExecutorType.STANDALONE;
+  }
+
   protected OptimizingTaskResult executeTask(OptimizingTask task) {
-    return executeTask(getConfig(), getThreadId(), task, LOG);
+    return executeTask(getConfig(), getThreadId(), task, LOG, null);
   }
 
   protected void completeTask(OptimizingTaskResult optimizingTaskResult) {
@@ -124,9 +130,24 @@ public class OptimizerExecutor extends AbstractOptimizerOperator {
     }
   }
 
-  @SuppressWarnings({"rawtypes", "unchecked"})
   public static OptimizingTaskResult executeTask(
       OptimizerConfig config, int threadId, OptimizingTask task, Logger logger) {
+    return executeTask(config, threadId, task, logger, Maps.newHashMap());
+  }
+
+  @SuppressWarnings({"rawtypes", "unchecked"})
+  public static OptimizingTaskResult executeTask(
+      OptimizerConfig config,
+      int threadId,
+      OptimizingTask task,
+      Logger logger,
+      Map<String, Object> metricsCal) {
+    logger.info(
+        "Start to execute task[{}]({}) by executor[{}] on host {}",
+        task.getTaskId(),
+        task,
+        threadId,
+        System.getenv("HOSTNAME"));
     long startTime = System.currentTimeMillis();
     TableOptimizing.OptimizingInput input;
     try {

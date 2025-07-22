@@ -23,7 +23,9 @@ import org.apache.amoro.api.OptimizingTaskResult;
 import org.apache.amoro.optimizer.common.OptimizerConfig;
 import org.apache.amoro.optimizer.common.OptimizerExecutor;
 import org.apache.amoro.shade.guava32.com.google.common.base.Strings;
+import org.apache.amoro.shade.guava32.com.google.common.collect.Maps;
 import org.apache.flink.metrics.Counter;
+import org.apache.flink.metrics.Metric;
 import org.apache.flink.metrics.MetricGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -44,6 +46,7 @@ public class FlinkOptimizerExecutor extends OptimizerExecutor {
   private Map<String, String> runtimeContext = new ConcurrentHashMap<String, String>();
   private MetricGroup operatorMetricGroup;
   private Counter taskCounter = null;
+  private Map<String, Metric> metricMap = Maps.newHashMap();
 
   public FlinkOptimizerExecutor(OptimizerConfig config, int threadId) {
     super(config, threadId);
@@ -55,7 +58,9 @@ public class FlinkOptimizerExecutor extends OptimizerExecutor {
 
   public void initOperatorMetric(MetricGroup metricGroup) {
     this.operatorMetricGroup = metricGroup;
-    taskCounter = this.operatorMetricGroup.addGroup("amoro").addGroup("optimizer").counter("tasks");
+    metricMap.put(
+        "taskCounter",
+        this.operatorMetricGroup.addGroup("amoro").addGroup("optimizer").counter("tasks"));
   }
 
   private void callBeforeTaskComplete() {
@@ -80,5 +85,9 @@ public class FlinkOptimizerExecutor extends OptimizerExecutor {
           errorMsg.substring(0, Math.min(ERROR_MESSAGE_MAX_LENGTH, errorMsg.length())));
     }
     return result;
+  }
+
+  public void logRuntimeContext() {
+    LOG.info("Optimizer executor runtime context: {}", runtimeContext);
   }
 }

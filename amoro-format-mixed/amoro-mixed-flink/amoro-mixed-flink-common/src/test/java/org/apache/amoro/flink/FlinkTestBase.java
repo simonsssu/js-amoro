@@ -39,6 +39,7 @@ import org.apache.amoro.shade.guava32.com.google.common.collect.Maps;
 import org.apache.amoro.table.KeyedTable;
 import org.apache.flink.api.common.restartstrategy.RestartStrategies;
 import org.apache.flink.configuration.Configuration;
+import org.apache.flink.configuration.HeartbeatManagerOptions;
 import org.apache.flink.runtime.state.StateBackend;
 import org.apache.flink.runtime.state.filesystem.FsStateBackend;
 import org.apache.flink.streaming.api.CheckpointingMode;
@@ -161,12 +162,16 @@ public class FlinkTestBase extends TableTestBase {
           StateBackend backend =
               new FsStateBackend(
                   "file:///" + System.getProperty("java.io.tmpdir") + "/flink/backend");
-          env =
-              StreamExecutionEnvironment.getExecutionEnvironment(
-                  MiniClusterResource.DISABLE_CLASSLOADER_CHECK_CONFIG);
+          Configuration c =
+              MiniClusterResource.DISABLE_CLASSLOADER_CHECK_CONFIG
+                  .set(HeartbeatManagerOptions.HEARTBEAT_INTERVAL, 300000L)
+                  .set(HeartbeatManagerOptions.HEARTBEAT_TIMEOUT, 500000L);
+
+          env = StreamExecutionEnvironment.getExecutionEnvironment(c);
           env.setParallelism(1);
           env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
           env.getCheckpointConfig().setCheckpointInterval(300);
+
           env.getCheckpointConfig()
               .enableExternalizedCheckpoints(
                   CheckpointConfig.ExternalizedCheckpointCleanup.RETAIN_ON_CANCELLATION);

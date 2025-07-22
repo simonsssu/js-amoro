@@ -56,7 +56,7 @@ import org.apache.iceberg.types.Types;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.RowFactory;
 import org.apache.spark.sql.catalyst.InternalRow;
-import org.apache.spark.sql.catalyst.encoders.RowEncoder;
+import org.apache.spark.sql.catalyst.encoders.ExpressionEncoder;
 import org.apache.spark.sql.types.StructType;
 
 import java.io.IOException;
@@ -103,7 +103,7 @@ public class TestTableUtil {
   public static InternalRow recordToInternalRow(Schema schema, Record record) {
     StructType structType = SparkSchemaUtil.convert(schema);
     Row row = recordToRow(record);
-    return RowEncoder.apply(structType).createSerializer().apply(row);
+    return ExpressionEncoder.apply(structType).createSerializer().apply(row);
   }
 
   public static Record rowToRecord(Row row, Types.StructType type) {

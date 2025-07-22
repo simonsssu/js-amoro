@@ -19,12 +19,12 @@
 package org.apache.amoro.flink.lookup;
 
 import org.apache.amoro.AmoroIOException;
+import org.apache.amoro.shade.guava32.com.google.common.cache.Cache;
+import org.apache.amoro.shade.guava32.com.google.common.cache.CacheBuilder;
 import org.apache.amoro.utils.map.RocksDBBackend;
 import org.apache.flink.annotation.VisibleForTesting;
 import org.apache.flink.metrics.Gauge;
 import org.apache.flink.metrics.MetricGroup;
-import org.apache.flink.shaded.guava30.com.google.common.cache.Cache;
-import org.apache.flink.shaded.guava30.com.google.common.cache.CacheBuilder;
 import org.apache.flink.table.data.RowData;
 import org.apache.flink.types.RowKind;
 import org.apache.flink.util.FlinkRuntimeException;

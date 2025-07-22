@@ -126,11 +126,18 @@ public class SchedulingPolicy {
     tableRuntimeMap.values().stream()
         .map(DefaultTableRuntime::getOptimizingState)
         .filter(
-            optimizingState ->
-                !isTablePending(optimizingState)
-                    || optimizingState.isBlocked(BlockableOperation.OPTIMIZE)
-                    || currentTime - optimizingState.getLastPlanTime()
-                        < optimizingState.getOptimizingConfig().getMinPlanInterval())
+            optimizingState -> {
+              LOG.debug(
+                  "Table {} is in optimizing state: {}, last plan time: {}, current time: {}",
+                  optimizingState.getTableIdentifier(),
+                  optimizingState.getOptimizingStatus(),
+                  optimizingState.getLastPlanTime(),
+                  currentTime);
+              return !isTablePending(optimizingState)
+                  || optimizingState.isBlocked(BlockableOperation.OPTIMIZE)
+                  || currentTime - optimizingState.getLastPlanTime()
+                      < optimizingState.getOptimizingConfig().getMinPlanInterval();
+            })
         .forEach(tableRuntime -> originalSet.add(tableRuntime.getTableIdentifier()));
   }
 

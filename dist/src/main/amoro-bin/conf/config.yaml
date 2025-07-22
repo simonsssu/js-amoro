@@ -103,26 +103,26 @@ ams:
   overview-cache:
     refresh-interval: 3min          # 3 min
     max-size: 3360                # Keep 7 days history by default, 7 * 24 * 60 / 3 = 3360
-
-  database:
-    type: derby
-    jdbc-driver-class: org.apache.derby.jdbc.EmbeddedDriver
-    url: jdbc:derby:/root/amoro/derby-persistent;create=true
-    connection-pool-max-total: 20
-    connection-pool-max-idle: 16
-    connection-pool-max-wait-millis: 30000
-
-#  MySQL database configuration.
+#
 #  database:
-#    type: mysql
-#    jdbc-driver-class: com.mysql.cj.jdbc.Driver
-#    url: jdbc:mysql://127.0.0.1:3306/db?useUnicode=true&characterEncoding=UTF8&autoReconnect=true&useAffectedRows=true&allowPublicKeyRetrieval=true&useSSL=false
-#    username: root
-#    password: root
-#    auto-create-tables: true
+#    type: derby
+#    jdbc-driver-class: org.apache.derby.jdbc.EmbeddedDriver
+#    url: jdbc:derby:/tmp/amoro/derby;create=true
 #    connection-pool-max-total: 20
 #    connection-pool-max-idle: 16
 #    connection-pool-max-wait-millis: 30000
+
+#  MySQL database configuration.
+  database:
+    type: mysql
+    jdbc-driver-class: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/amorodb?useUnicode=true&characterEncoding=UTF8&autoReconnect=true&useAffectedRows=true&allowPublicKeyRetrieval=true&useSSL=false
+    username: root
+    password: 123456
+    auto-create-tables: true
+    connection-pool-max-total: 20
+    connection-pool-max-idle: 16
+    connection-pool-max-wait-millis: 30000
 
 #  Postgres database configuration.
 #  database:

@@ -62,7 +62,8 @@ public class SparkContextUtil {
     String extensionsConf = sessionConfig.get(SPARK_SQL_EXTENSIONS_CONF);
     sparkConf.put(
         SPARK_SQL_EXTENSIONS,
-        joinExtensions(extensionsConf, MIXED_FORMAT_EXTENSION, ICEBERG_EXTENSION, PAIMON_EXTENSION));
+        joinExtensions(
+            extensionsConf, MIXED_FORMAT_EXTENSION, ICEBERG_EXTENSION, PAIMON_EXTENSION));
 
     List<String> catalogs = sessionConfig.get(TerminalSessionFactory.SessionConfigOptions.CATALOGS);
 

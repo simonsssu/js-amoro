@@ -22,8 +22,8 @@
 #        --file docker/amoro/Dockerfile \
 #        --tag apache/amoro:tagname
 #        .
-
-FROM eclipse-temurin:11-jdk-jammy AS builder
+FROM ecr.vip.ebayc3.com/rheos/nginx:latest-ubuntu22_jre17 AS builder
+#FROM eclipse-temurin:11-jdk-jammy AS builder
 
 # Add the entire project to the build container, unzip it,
 # and remove flink-optimizer to reduce the container size.
@@ -40,9 +40,11 @@ RUN AMORO_VERSION=`cat pom.xml | grep 'amoro-parent' -C 3 | grep -Eo '<version>.
     && rm -rf /workspace/amoro
 
 
-FROM eclipse-temurin:11-jdk-jammy
+#FROM eclipse-temurin:11-jdk-jammy
 
-ARG MAVEN_MIRROR=https://repo.maven.apache.org/maven2
+FROM ecr.vip.ebayc3.com/rheos/nginx:latest-ubuntu22_jre17
+
+ARG MAVEN_MIRROR=https://ebaycentral.qa.ebay.com/content/repositories/central
 
 ENV AMORO_HOME /usr/local/amoro
 ENV AMORO_CONF_DIR ${AMORO_HOME}/conf
@@ -53,10 +55,15 @@ COPY ./docker/amoro/entrypoint.sh /
 RUN chmod +x /entrypoint.sh
 COPY --from=builder "/usr/local/amoro" "/usr/local/amoro"
 
+RUN mkdir -p /var/log/amoro \
+    && chown app:app -R /usr/local/amoro /var/log/amoro \
+    && mkdir -p /opt/settings/kite2 \
+    && chown app:app -R /opt/settings/kite2
+
 WORKDIR ${AMORO_HOME}
 
-RUN cd ${AMORO_HOME}/lib \
-    && wget ${MAVEN_MIRROR}/mysql/mysql-connector-java/8.0.30/mysql-connector-java-8.0.30.jar
+COPY ./docker/mysql-connector-java-8.0.28.jar ${AMORO_HOME}/lib
+COPY ./docker/kite2-client.jar ${AMORO_HOME}/lib
 
 ENTRYPOINT ["/entrypoint.sh"]
 CMD ["help"]

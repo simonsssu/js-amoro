@@ -23,6 +23,7 @@ import org.apache.amoro.data.DataTreeNode;
 import org.apache.amoro.data.DefaultKeyedFile;
 import org.apache.amoro.data.FileNameRules;
 import org.apache.amoro.iceberg.Constants;
+import org.apache.amoro.optimizing.scan.TableFileScanHelper.FileScanResult;
 import org.apache.amoro.scan.ChangeTableIncrementalScan;
 import org.apache.amoro.shade.guava32.com.google.common.annotations.VisibleForTesting;
 import org.apache.amoro.shade.guava32.com.google.common.collect.Lists;
@@ -41,8 +42,7 @@ import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.SnapshotSummary;
-import org.apache.iceberg.expressions.Expression;
-import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.TableScan;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.util.PropertyUtil;
 import org.apache.iceberg.util.StructLikeMap;
@@ -61,13 +61,12 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class KeyedTableFileScanHelper implements TableFileScanHelper {
+public class KeyedTableFileScanHelper extends AbstractTableFileScanHelper {
   private static final Logger LOG = LoggerFactory.getLogger(KeyedTableFileScanHelper.class);
 
   private final KeyedTable keyedTable;
   private final long changeSnapshotId;
   private final long baseSnapshotId;
-  private Expression partitionFilter = Expressions.alwaysTrue();
   private final PartitionSpec spec;
 
   public KeyedTableFileScanHelper(KeyedTable keyedTable, KeyedTableSnapshot snapshot) {
@@ -180,6 +179,13 @@ public class KeyedTableFileScanHelper implements TableFileScanHelper {
                 .fromSequence(optimizedSequence)
                 .toSequence(maxSequence)
                 .useSnapshot(changeSnapshotId);
+
+        if (returnColumnsStats) {
+          changeTableIncrementalScan =
+              (ChangeTableIncrementalScan) changeTableIncrementalScan.includeColumnStats();
+          LOG.info("Include column stats when scanning change table {}", changeTable.name());
+        }
+
         try (CloseableIterable<FileScanTask> fileScanTasks =
             changeTableIncrementalScan.planFiles()) {
           for (FileScanTask fileScanTask : fileScanTasks) {
@@ -204,9 +210,14 @@ public class KeyedTableFileScanHelper implements TableFileScanHelper {
 
     CloseableIterable<FileScanResult> baseScanResult = CloseableIterable.empty();
     if (baseSnapshotId != Constants.INVALID_SNAPSHOT_ID) {
+      TableScan baseScan = baseTable.newScan().filter(partitionFilter).useSnapshot(baseSnapshotId);
+      if (returnColumnsStats) {
+        baseScan = baseScan.includeColumnStats();
+        LOG.info("Include column stats when scanning base table {}", baseTable.name());
+      }
       baseScanResult =
           CloseableIterable.transform(
-              baseTable.newScan().filter(partitionFilter).useSnapshot(baseSnapshotId).planFiles(),
+              baseScan.planFiles(),
               fileScanTask -> {
                 DataFile dataFile = wrapBaseFile(fileScanTask.file());
                 List<ContentFile<?>> deleteFiles = new ArrayList<>(fileScanTask.deletes());
@@ -218,12 +229,6 @@ public class KeyedTableFileScanHelper implements TableFileScanHelper {
     }
 
     return CloseableIterable.concat(Lists.newArrayList(changeScanResult, baseScanResult));
-  }
-
-  @Override
-  public KeyedTableFileScanHelper withPartitionFilter(Expression partitionFilter) {
-    this.partitionFilter = partitionFilter;
-    return this;
   }
 
   private DataFile wrapChangeFile(DataFile dataFile) {

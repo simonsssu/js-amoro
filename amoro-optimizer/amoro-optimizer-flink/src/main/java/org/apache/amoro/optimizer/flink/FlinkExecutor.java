@@ -64,6 +64,7 @@ public class FlinkExecutor extends AbstractStreamOperator<Void>
     executor.initOperatorMetric(getMetricGroup());
     optimizerThread =
         new Thread(() -> executor.start(), "flink-optimizer-executor-" + subTaskIndex);
+    executor.logRuntimeContext();
     optimizerThread.setDaemon(true);
     optimizerThread.start();
   }

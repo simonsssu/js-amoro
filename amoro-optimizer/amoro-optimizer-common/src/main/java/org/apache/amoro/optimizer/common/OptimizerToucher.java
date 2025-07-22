@@ -59,8 +59,8 @@ public class OptimizerToucher extends AbstractOptimizerOperator {
         if (checkToken()) {
           touch();
         }
-        waitAShortTime(getConfig().getHeartBeat());
       } catch (Throwable t) {
+        waitAShortTime(getConfig().getHeartBeat());
         LOG.error("Optimizer toucher got an unexpected error", t);
       }
     }

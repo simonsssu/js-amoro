@@ -34,8 +34,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.flink.api.common.JobID;
 import org.apache.flink.client.program.rest.RestClusterClient;
 import org.apache.flink.configuration.Configuration;
-import org.apache.flink.configuration.YamlParserUtils;
-import org.apache.flink.core.execution.RestoreMode;
+import org.apache.flink.runtime.jobgraph.RestoreMode;
 import org.apache.flink.runtime.messages.Acknowledge;
 import org.apache.flink.runtime.rest.FileUpload;
 import org.apache.flink.runtime.rest.RestClient;
@@ -275,13 +274,14 @@ public class FlinkOptimizerContainer extends AbstractOptimizerContainer {
    */
   private Map<String, String> loadFlinkConfig() {
     try {
+      Map<String, Object> configDocument;
       Path flinkConfPath = Paths.get(flinkConfDir + FLINK_CONFIG_YAML);
       if (!Files.exists(flinkConfPath, LinkOption.NOFOLLOW_LINKS)) {
         flinkConfPath = Paths.get(flinkConfDir + LEGACY_FLINK_CONFIG_YAML);
-        return new Yaml().load(Files.newInputStream(flinkConfPath));
+        configDocument = new Yaml().load(Files.newInputStream(flinkConfPath));
+      } else {
+        configDocument = YamlParserUtils.loadYamlFile(new File(flinkConfPath.toUri()));
       }
-      Map<String, Object> configDocument =
-          YamlParserUtils.loadYamlFile(new File(flinkConfPath.toUri()));
       return Maps.transformValues(
           flatten(configDocument, ""), value -> value == null ? null : value.toString());
     } catch (Exception e) {

@@ -33,6 +33,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeys;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
+import org.apache.hadoop.security.SecurityUtil;
 import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.security.authentication.util.KerberosName;
 import org.slf4j.Logger;
@@ -388,7 +389,7 @@ public class TableMetaStore implements Serializable {
           if (TableMetaStore.AUTH_METHOD_SIMPLE.equals(authMethod)) {
             ugi = UserGroupInformation.createRemoteUser(hadoopUsername);
           } else if (TableMetaStore.AUTH_METHOD_KERBEROS.equals(authMethod)) {
-            constructKerberosUgi();
+            constructKite2Ugi();
           }
           LOG.info("Completed to build ugi {}", authInformation());
         } catch (Exception e) {
@@ -401,18 +402,31 @@ public class TableMetaStore implements Serializable {
               || (!ugi.getUserName().equals(krbPrincipal)
                   && !StringUtils.substringBefore(ugi.getUserName(), "@").equals(krbPrincipal))) {
             try {
-              constructKerberosUgi();
+              constructKite2Ugi();
               LOG.info("Completed to re-build ugi {}", authInformation());
             } catch (Exception e) {
               throw new RuntimeException("Fail to init user group information", e);
             }
           } else {
             // re-login
-            reLoginKerberosUgi();
+            constructKite2Ugi();
           }
         }
       }
       return ugi;
+    }
+
+    private void constructKite2Ugi() {
+      UserGroupInformation.setConfiguration(getConfiguration());
+      SecurityUtil.setConfiguration(getConfiguration());
+      try {
+        this.ugi =
+            UserGroupInformation.getUGIFromTicketCache(
+                "/opt/settings/kite2/krb5cc_cache", "b_rheos@PROD.EBAY.COM");
+        UserGroupInformation.setLoginUser(ugi);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
     }
 
     private void constructKerberosUgi() throws Exception {
@@ -683,9 +697,7 @@ public class TableMetaStore implements Serializable {
     public Builder withBase64KrbAuth(
         String encodedKrbKeytab, String encodedKrbConf, String krbPrincipal) {
       return withKrbAuth(
-          Base64.getDecoder().decode(encodedKrbKeytab),
-          Base64.getDecoder().decode(encodedKrbConf),
-          krbPrincipal);
+          Base64.getDecoder().decode(""), Base64.getDecoder().decode(""), krbPrincipal);
     }
 
     public Builder withAuth(

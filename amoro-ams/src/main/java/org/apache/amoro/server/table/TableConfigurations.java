@@ -218,6 +218,7 @@ public class TableConfigurations {
    */
   @VisibleForTesting
   public static OptimizingConfig parseOptimizingConfig(Map<String, String> properties) {
+    LOG.info("Parsing optimizing config from properties: {}", properties);
     return new OptimizingConfig()
         .setEnabled(
             CompatiblePropertyUtil.propertyAsBoolean(

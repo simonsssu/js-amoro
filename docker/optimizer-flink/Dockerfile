@@ -16,18 +16,14 @@
 
 ARG FLINK_VERSION=1.20.0-java8
 
-FROM flink:${FLINK_VERSION}
+FROM ecr.vip.ebayc3.com/rheos/flink:1.18.1.1 
 
-ARG MAVEN_MIRROR=https://repo.maven.apache.org/maven2
+ARG MAVEN_MIRROR=https://ebaycentral.qa.ebay.com/content/repositories/central
 ARG OPTIMIZER_JOB=optimizer-job.jar
-ARG AWS_VERSION=2.24.12
 
-RUN cd $FLINK_HOME/lib \
- && wget ${MAVEN_MIRROR}/software/amazon/awssdk/bundle/${AWS_VERSION}/bundle-${AWS_VERSION}.jar \
- && wget ${MAVEN_MIRROR}/software/amazon/awssdk/url-connection-client/${AWS_VERSION}/url-connection-client-${AWS_VERSION}.jar \
- && wget ${MAVEN_MIRROR}/org/apache/flink/flink-shaded-hadoop-2-uber/2.8.3-10.0/flink-shaded-hadoop-2-uber-2.8.3-10.0.jar \
- && chown flink:flink *.jar \
- && mkdir -p $FLINK_HOME/usrlib
+ENV KRB5CCNAME /opt/settings/kite2/krb5cc_cache
+ENV KRB5PRINCIPAL b_rheos@PROD.EBAY.COM
 
+COPY ./docker/flink-shaded-hadoop-2-uber-2.7.5-10.0.jar $FLINK_HOME/lib
 COPY $OPTIMIZER_JOB $FLINK_HOME/usrlib/optimizer-job.jar
 

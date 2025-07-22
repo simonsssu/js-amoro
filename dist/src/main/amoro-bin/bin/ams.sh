@@ -17,12 +17,32 @@
 # limitations under the License.
 #
 
+
+function getProperty() {
+  pkey=$1
+  pfile=$2
+  pvalue=`grep $pkey $pfile | awk '{idx = index($0, ": "); print substr($0, idx + 2)}'`
+  echo $pvalue
+}
+
+function retry_command() {
+  local max_retry=$1
+  local interval=$2
+  local cmd=$3
+
+  local retry=0
+  while [ $retry -lt $max_retry ]; do
+    echo "Retrying command: $cmd"
+    $cmd && return 0
+    retry=$((retry + 1))
+    sleep $interval
+  done
+  return 1
+}
+#########################################################################
+
 CURRENT_DIR="$( cd "$(dirname "$0")" ; pwd -P )"
-
-
 source ${CURRENT_DIR}/load-config.sh
-
-
 
 JAVA_OPTS="-server -XX:+UseG1GC -XX:MaxGCPauseMillis=200 \
 -Xloggc:$AMORO_LOG_DIR/gc.log -XX:+PrintGCDateStamps -XX:+IgnoreUnrecognizedVMOptions -XX:+UseGCLogFileRotation -XX:NumberOfGCLogFiles=10 -XX:GCLogFileSize=10M \
@@ -57,6 +77,29 @@ fi
 
 RUN_SERVER="org.apache.amoro.server.AmoroServiceContainer"
 
+#############################################################################
+KITE_CONF_FILE=$AMORO_CONF_DIR/kite2.properties
+RHEOS_FLINK_SECRET_FILE=/opt/flink_install/certs/flink-secret
+RHOES_API_KEY=`getProperty service.account.api.key ${RHEOS_FLINK_SECRET_FILE}`
+RHOES_API_SECRET=`getProperty service.account.api.secret ${RHEOS_FLINK_SECRET_FILE}`
+
+sed -i -e "s/%RHEOS.APIKEY%/$RHOES_API_KEY/g" $KITE_CONF_FILE
+sed -i -e "s/%RHEOS.APISECRET%/$RHOES_API_SECRET/g" $KITE_CONF_FILE
+
+KITE2_AGENT=""
+KITE2FILE=/usr/local/amoro/conf/kite2.properties
+if [[ -f "$KITE2FILE" ]]; then
+    KITE2_AGENT="-javaagent:/usr/local/amoro/lib/kite2-client.jar=/usr/local/amoro/conf/kite2.properties"
+fi
+
+chmod a+x $AMORO_HOME/bin/generate-ticket-cache.sh
+retry_command 20 3 "$AMORO_HOME/bin/generate-ticket-cache.sh $KITE_CONF_FILE"
+
+export KRB5CCNAME=grep '^kite.ticket.cache.location=' config.properties | cut -d'=' -f2
+export KRB5PRINCIPAL=grep '^kite.user.principal=' config.properties | cut -d'=' -f2
+
+#################################################################################
+
 
 LIB_PATH=$AMORO_HOME/lib
 STDERR_LOG=${AMORO_LOG_DIR}/app.log.err
@@ -89,7 +132,9 @@ if [ -n "${AMORO_ADDITION_CLASSPATH}" ]; then
     export CLASSPATH=$AMORO_ADDITION_CLASSPATH:$CLASSPATH
 fi
 
-CMDS="$JAVA_RUN -Dlog4j.configurationFile=${AMORO_LOG_CONF_FILE} -Dlog.home=${AMORO_LOG_DIR} -Dlog.dir=${AMORO_LOG_DIR} -Duser.dir=${AMORO_HOME}  $JAVA_OPTS ${RUN_SERVER}"
+#CMDS="$JAVA_RUN -Dlog4j.configurationFile=${AMORO_LOG_CONF_FILE} -Dlog.home=${AMORO_LOG_DIR} -Dlog.dir=${AMORO_LOG_DIR} -Duser.dir=${AMORO_HOME}  $JAVA_OPTS ${RUN_SERVER}"
+CMDS="$JAVA_RUN $KITE2_AGENT -Dlog4j.configurationFile=${AMORO_LOG_CONF_FILE} -Dlog.home=${AMORO_LOG_DIR} -Dlog.dir=${AMORO_LOG_DIR} -Duser.dir=${AMORO_HOME}  $JAVA_OPTS ${RUN_SERVER}"
+
 #0:pid bad and proc OK;   1:pid ok and proc bad;    2:pid bad
 function status(){
     test -e ${PID} || return 2

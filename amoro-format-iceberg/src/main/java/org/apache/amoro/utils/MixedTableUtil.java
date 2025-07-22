@@ -243,7 +243,7 @@ public class MixedTableUtil {
         Set<String> unsupportedFields = Sets.newHashSet(primaryKeySpec.fieldNames());
         unsupportedFields.addAll(
             partitionSpec.fields().stream()
-                .map(PartitionField::fieldId)
+                .map(PartitionField::sourceId)
                 .map(schema::findField)
                 .map(Types.NestedField::name)
                 .collect(Collectors.toSet()));
