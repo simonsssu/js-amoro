@@ -16,7 +16,7 @@
 
 ARG SPARK_VERSION=3.3.3
 
-FROM apache/spark:${SPARK_VERSION}
+FROM hub.tess.io/adihadoop/spark:3.5.0-ebay-latest
 
 ARG MAVEN_MIRROR=https://repo.maven.apache.org/maven2
 ARG OPTIMIZER_JOB=optimizer-job.jar

@@ -18,13 +18,24 @@
 
 package org.apache.amoro.server.manager;
 
+import com.ebay.hadoop.kite2.client.config.Configs;
 import org.apache.amoro.OptimizerProperties;
 import org.apache.amoro.resource.Resource;
+import org.apache.amoro.server.Environments;
+import org.apache.amoro.server.manager.kyuubi.HadoopUtils;
+import org.apache.amoro.server.manager.kyuubi.KyuubiUtil;
 import org.apache.amoro.server.utils.SparkConfUtil;
 import org.apache.amoro.shade.guava32.com.google.common.base.Function;
 import org.apache.amoro.shade.guava32.com.google.common.base.Preconditions;
 import org.apache.amoro.shade.guava32.com.google.common.collect.Maps;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.hadoop.security.UserGroupInformation;
+import org.apache.kyuubi.client.BatchRestApi;
+import org.apache.kyuubi.client.KyuubiRestClient;
+import org.apache.kyuubi.client.api.v1.dto.Batch;
+import org.apache.kyuubi.client.api.v1.dto.BatchRequest;
+import org.apache.kyuubi.client.api.v1.dto.OperationLog;
+import org.apache.kyuubi.client.util.BatchUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.Tuple2;
@@ -33,10 +44,15 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -49,6 +65,9 @@ public class SparkOptimizerContainer extends AbstractOptimizerContainer {
   private static final String DEFAULT_JOB_URI = "/plugin/optimizer/spark/optimizer-job.jar";
   private static final String SPARK_JOB_MAIN_CLASS =
       "org.apache.amoro.optimizer.spark.SparkOptimizer";
+
+  public static final String SUBMIT_MODE = "submit-mode";
+
   public static final String SPARK_MASTER = "master";
   public static final String SPARK_DEPLOY_MODE = "deploy-mode";
   public static final String SPARK_JOB_URI = "job-uri";
@@ -70,69 +89,148 @@ public class SparkOptimizerContainer extends AbstractOptimizerContainer {
   private String sparkHome;
   private String jobUri;
 
+  private BatchRequest batchRequest;
+  private SubmitMode submitMode;
+
   @Override
   public void init(String name, Map<String, String> containerProperties) {
     super.init(name, containerProperties);
-    this.sparkHome = getSparkHome();
-    this.sparkMaster = containerProperties.getOrDefault(SPARK_MASTER, "yarn");
-    Preconditions.checkArgument(
-        StringUtils.isNotEmpty(sparkMaster), "The property: %s is required", sparkMaster);
-    String runMode =
-        Optional.ofNullable(containerProperties.get(SPARK_DEPLOY_MODE))
-            .orElse(DeployMode.CLIENT.getValue());
-    this.deployMode = DeployMode.valueToEnum(runMode);
-    String jobUri = containerProperties.get(SPARK_JOB_URI);
-    if (deployMode.equals(DeployMode.CLUSTER.name())) {
+    this.submitMode =
+        SubmitMode.valueToEnum(
+            containerProperties.getOrDefault(SUBMIT_MODE, SubmitMode.COMMON.getValue()));
+    if (submitMode == SubmitMode.KYUUBI) {
+      LOG.info("Using kyuubi submit mode to start spark optimizer.");
+      this.sparkHome = getSparkHome();
+      this.batchRequest = new BatchRequest();
+      batchRequest.setBatchType("spark");
+      batchRequest.setResource("spark-internal");
+      batchRequest.setClassName(SPARK_JOB_MAIN_CLASS);
+      String jobUri = containerProperties.get(SPARK_JOB_URI);
+      if (StringUtils.isEmpty(jobUri)) {
+        throw new IllegalArgumentException(
+            "The property: job-uri is required when submit-mode is kyuubi.");
+      }
+      batchRequest.setResource(jobUri);
+
+      Map<String, String> sparkConf =
+          new HashMap<>() {
+            {
+              put("kyuubi.session.tag", "amoro");
+              put("kyuubi.session.cluster", "apollorno");
+              put("spark.sql.bucketing.coalesceBucketsInJoin.enabled", "true");
+              put("spark.driver.maxResultSize", "6g");
+              put("spark.executor.num", "100");
+              put("spark.sql.shuffle.partitions", "3000");
+              put("spark.sql.broadcastTimeout", "3000");
+              put("spark.sql.sources.bucketing.enabled", "true");
+              put("spark.default.parallelism", "3000");
+              put("spark.sql.adaptive.enabled", "true");
+              put("spark.sql.adaptive.coalescePartitions.enabled", "true");
+
+              put("spark.kryoserializer.buffer", "2m");
+              put("spark.dynamicAllocation.minExecutors", "100");
+              put("spark.executor.memoryOverhead", "4g");
+              put("spark.sql.sources.v2.bucketing.enabled", "true");
+
+              put(
+                  "spark.kerberos.access.hadoopFileSystems",
+                  "viewfs://apollo-rno,viewfs://hermes-rno,hdfs://hermes-rno,hdfs://hermes-rno-ns01");
+
+              put("spark.sql.adaptive.skewJoin.enabled", "true");
+              put("spark.executor.memory", "40g");
+              put("spark.driver.memory", "20g");
+              put("spark.kryoserializer.buffer.max", "1024m");
+              put("spark.driver.cores", "4");
+              put("spark.executor.heartbeatInterval", "20s");
+              put("spark.yarn.maxAppAttempts", "0");
+              put("spark.executor.cores", "2");
+
+              put("spark.sql.files.maxPartitionBytes", "1g");
+              put("spark.dynamicAllocation.maxExecutors", "400");
+              put("spark.sql.sources.bucketing.autoBucketedScan.enabled", "true");
+              put("spark.sql.sources.partitionOverwriteMode", "dynamic");
+              put("spark.yarn.max.executor.failures", "100");
+              put("spark.dynamicAllocation.enabled", "true");
+              put("spark.yarn.queue", "hdlq-gdi-default");
+              put("spark.app.name", "amoro-compaction-job");
+              put("spark.kyuubi.batch.etl.sql.encoded.statements", "");
+              put("hive.server2.proxy.user", "b_rheos");
+            }
+          };
+      batchRequest.setConf(sparkConf);
+
+    } else {
+      this.sparkHome = getSparkHome();
+      this.sparkMaster = containerProperties.getOrDefault(SPARK_MASTER, "yarn");
       Preconditions.checkArgument(
-          StringUtils.isNotEmpty(jobUri),
-          "The property: %s is required if running mode in cluster mode.",
-          SPARK_JOB_URI);
-    }
-    if (StringUtils.isEmpty(jobUri)) {
-      jobUri = amsHome + DEFAULT_JOB_URI;
-    }
-    this.jobUri = jobUri;
-    SparkConfUtil sparkConf =
-        SparkConfUtil.buildFor(loadSparkConfig(), containerProperties).build();
-    if (deployedOnKubernetes()) {
-      String imageRef =
-          sparkConf.configValue(SparkOptimizerContainer.SparkConfKeys.KUBERNETES_IMAGE_REF);
-      Preconditions.checkArgument(
-          StringUtils.isNotEmpty(imageRef),
-          "The spark-conf: %s is required if running mode is %s",
-          SparkOptimizerContainer.SparkConfKeys.KUBERNETES_IMAGE_REF,
-          deployMode.getValue());
+          StringUtils.isNotEmpty(sparkMaster), "The property: %s is required", sparkMaster);
+      String runMode =
+          Optional.ofNullable(containerProperties.get(SPARK_DEPLOY_MODE))
+              .orElse(DeployMode.CLIENT.getValue());
+      this.deployMode = DeployMode.valueToEnum(runMode);
+      String jobUri = containerProperties.get(SPARK_JOB_URI);
+      if (deployMode.equals(DeployMode.CLUSTER.name())) {
+        Preconditions.checkArgument(
+            StringUtils.isNotEmpty(jobUri),
+            "The property: %s is required if running mode in cluster mode.",
+            SPARK_JOB_URI);
+      }
+      if (StringUtils.isEmpty(jobUri)) {
+        jobUri = amsHome + DEFAULT_JOB_URI;
+      }
+      this.jobUri = jobUri;
+      SparkConfUtil sparkConf =
+          SparkConfUtil.buildFor(loadSparkConfig(), containerProperties).build();
+      if (deployedOnKubernetes()) {
+        String imageRef =
+            sparkConf.configValue(SparkOptimizerContainer.SparkConfKeys.KUBERNETES_IMAGE_REF);
+        Preconditions.checkArgument(
+            StringUtils.isNotEmpty(imageRef),
+            "The spark-conf: %s is required if running mode is %s",
+            SparkOptimizerContainer.SparkConfKeys.KUBERNETES_IMAGE_REF,
+            deployMode.getValue());
+      }
     }
   }
 
   @Override
   protected Map<String, String> doScaleOut(Resource resource) {
-    String startUpArgs = this.buildOptimizerStartupArgsString(resource);
     try {
-      String exportCmd = String.join(" && ", exportSystemProperties());
-      String startUpCmd = String.format("%s && %s", exportCmd, startUpArgs);
-      String[] cmd = {"/bin/sh", "-c", startUpCmd};
-      LOG.info("Starting spark optimizer using command : {}", startUpCmd);
-      Process exec = Runtime.getRuntime().exec(cmd);
-      Map<String, String> startUpStatesMap = Maps.newHashMap();
-      if (deployedOnKubernetes()) {
-        SparkConfUtil sparkConf =
-            SparkConfUtil.buildFor(loadSparkConfig(), getContainerProperties())
-                .withGroupProperties(resource.getProperties())
-                .build();
-        String namespace =
-            StringUtils.defaultIfEmpty(
-                sparkConf.configValue(SparkConfKeys.KUBERNETES_NAMESPACE), "default");
-        startUpStatesMap.put(
-            KUBERNETES_SUBMISSION_ID_PROPERTY,
-            String.format("%s:%s", namespace, kubernetesDriverName(resource)));
+      if (submitMode == SubmitMode.KYUUBI) {
+        LOG.info("Submit via kyuubi.");
+        List<String> jobArgs =
+            Arrays.asList(super.buildOptimizerStartupArgsString(resource).split("\\s+"));
+        LOG.info("Starting spark optimizer using kyuubi with args: {}", jobArgs);
+        batchRequest.setArgs(jobArgs);
+        submitViaKyuubi(batchRequest);
+        return Maps.newHashMap();
       } else {
-        String applicationId = fetchCommandOutput(exec, yarnApplicationIdReader);
-        if (applicationId != null) {
-          startUpStatesMap.put(YARN_APPLICATION_ID_PROPERTY, applicationId);
+        String startUpArgs = this.buildOptimizerStartupArgsString(resource);
+        String exportCmd = String.join(" && ", exportSystemProperties());
+        String startUpCmd = String.format("%s && %s", exportCmd, startUpArgs);
+        String[] cmd = {"/bin/sh", "-c", startUpCmd};
+        LOG.info("Starting spark optimizer using command : {}", startUpCmd);
+        Process exec = Runtime.getRuntime().exec(cmd);
+        Map<String, String> startUpStatesMap = Maps.newHashMap();
+        if (deployedOnKubernetes()) {
+          SparkConfUtil sparkConf =
+              SparkConfUtil.buildFor(loadSparkConfig(), getContainerProperties())
+                  .withGroupProperties(resource.getProperties())
+                  .build();
+          String namespace =
+              StringUtils.defaultIfEmpty(
+                  sparkConf.configValue(SparkConfKeys.KUBERNETES_NAMESPACE), "default");
+          startUpStatesMap.put(
+              KUBERNETES_SUBMISSION_ID_PROPERTY,
+              String.format("%s:%s", namespace, kubernetesDriverName(resource)));
+        } else {
+          String applicationId = fetchCommandOutput(exec, yarnApplicationIdReader);
+          if (applicationId != null) {
+            startUpStatesMap.put(YARN_APPLICATION_ID_PROPERTY, applicationId);
+          }
         }
+        return startUpStatesMap;
       }
-      return startUpStatesMap;
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to scale out spark optimizer.", e);
     }
@@ -301,6 +399,103 @@ public class SparkOptimizerContainer extends AbstractOptimizerContainer {
 
   private String kubernetesDriverName(Resource resource) {
     return "amoro-optimizer-" + resource.getResourceId();
+  }
+
+  private void submitViaKyuubi(BatchRequest batchRequest) {
+    //////////////////////////////////////////////////////////////////
+    try (KyuubiRestClient client = KyuubiUtil.getKyuubiClient()) {
+      BatchRestApi batchRestApi = new BatchRestApi(client);
+      Properties kite2Properties = new Properties();
+      String kite2ConfPath = Environments.getConfigPath() + "/" + "kite2.properties";
+      LOG.info("Loading kite2 properties from {}", kite2ConfPath);
+      kite2Properties.load(Files.newInputStream(Paths.get(kite2ConfPath)));
+      String ticketCache = Configs.CONF_TICKET_CACHE_LOCATION.load(kite2Properties);
+      String principal = Configs.CONF_USER_PRINCIPAL.load(kite2Properties);
+
+      LOG.info("Using ticket cache: {}, principal: {}", ticketCache, principal);
+
+      String batchId =
+          HadoopUtils.doAs(
+              ticketCache,
+              principal,
+              () -> {
+                return batchRestApi.createBatch(batchRequest).getId();
+              });
+
+      /** Set it to true if you want to wait it finished. */
+      boolean waitAppCompletion = false;
+      int logLineOffset = 0;
+      while (true) {
+        UserGroupInformation ugi =
+            UserGroupInformation.getUGIFromTicketCache(ticketCache, principal);
+        Thread.sleep(3000);
+
+        // fetch 100 lines logs per time
+        final int finalLogLineOffset = logLineOffset; // used in lambda expression only
+        OperationLog log =
+            HadoopUtils.doAs(
+                ugi,
+                () -> {
+                  return batchRestApi.getBatchLocalLog(batchId, finalLogLineOffset, 100);
+                });
+
+        log.getLogRowSet().forEach(line -> LOG.info("Kuyybi --->: " + line));
+        logLineOffset += log.getRowCount();
+
+        Batch latestBatchReport = null;
+
+        if (log.getRowCount() == 0) {
+          // if no log fetched, check the batch state
+          latestBatchReport =
+              HadoopUtils.doAs(
+                  ugi,
+                  () -> {
+                    return batchRestApi.getBatchById(batchId);
+                  });
+          if (BatchUtils.isTerminalState(latestBatchReport.getState())) {
+            LOG.info("The batch has been terminated: " + latestBatchReport);
+            break;
+          }
+        }
+
+        if (latestBatchReport == null) {
+          latestBatchReport =
+              HadoopUtils.doAs(
+                  ugi,
+                  () -> {
+                    return batchRestApi.getBatchById(batchId);
+                  });
+          if (!waitAppCompletion && !StringUtils.isBlank(latestBatchReport.getAppId())) {
+            LOG.info("The batch has been submitted: " + latestBatchReport);
+            break;
+          }
+        }
+      }
+
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to create KyuubiRestClient", e);
+    }
+  }
+
+  private enum SubmitMode {
+    KYUUBI("kyuubi"),
+    COMMON("common");
+    private final String value;
+
+    SubmitMode(String value) {
+      this.value = value;
+    }
+
+    public static SubmitMode valueToEnum(String value) {
+      return Arrays.stream(values())
+          .filter(t -> t.value.equalsIgnoreCase(value))
+          .findFirst()
+          .orElseThrow(() -> new IllegalArgumentException("can't parse value: " + value));
+    }
+
+    public String getValue() {
+      return value;
+    }
   }
 
   private enum DeployMode {
