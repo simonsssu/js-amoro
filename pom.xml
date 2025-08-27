@@ -1471,4 +1471,14 @@
             </properties>
         </profile>
     </profiles>
+      <distributionManagement>
+    <repository>
+      <id>raptor.releases</id>
+      <url>https://ebaycentral.qa.ebay.com/content/repositories/releases/</url>
+    </repository>
+    <snapshotRepository>
+      <id>raptor.snapshots</id>
+      <url>https://ebaycentral.qa.ebay.com/content/repositories/snapshots/</url>
+    </snapshotRepository>
+  </distributionManagement>
 </project>

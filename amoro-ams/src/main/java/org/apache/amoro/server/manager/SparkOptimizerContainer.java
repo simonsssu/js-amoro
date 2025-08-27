@@ -117,6 +117,7 @@ public class SparkOptimizerContainer extends AbstractOptimizerContainer {
             {
               put("kyuubi.session.tag", "amoro");
               put("kyuubi.session.cluster", "apollorno");
+
               put("spark.sql.bucketing.coalesceBucketsInJoin.enabled", "true");
               put("spark.driver.maxResultSize", "6g");
               put("spark.executor.num", "100");
@@ -151,10 +152,12 @@ public class SparkOptimizerContainer extends AbstractOptimizerContainer {
               put("spark.sql.sources.partitionOverwriteMode", "dynamic");
               put("spark.yarn.max.executor.failures", "100");
               put("spark.dynamicAllocation.enabled", "true");
+
               put("spark.yarn.queue", "hdlq-gdi-default");
+
               put("spark.app.name", "amoro-compaction-job");
               put("spark.kyuubi.batch.etl.sql.encoded.statements", "");
-              put("hive.server2.proxy.user", "b_rheos");
+              //              put("hive.server2.proxy.user", "b_rheos");
             }
           };
       batchRequest.setConf(sparkConf);
