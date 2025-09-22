@@ -18,7 +18,6 @@
 
 package org.apache.amoro.io.reader;
 
-import org.apache.amoro.data.DefaultKeyedFile;
 import org.apache.amoro.data.PrimaryKeyedFile;
 import org.apache.amoro.io.AuthenticatedFileIO;
 import org.apache.amoro.scan.KeyedTableScanTask;
@@ -214,14 +213,6 @@ public abstract class AbstractMergeDataReader<T> extends AbstractKeyedDataReader
         (task1, task2) -> {
           PrimaryKeyedFile file2 = task2.file();
           PrimaryKeyedFile file1 = task1.file();
-          DefaultKeyedFile df1 = (DefaultKeyedFile) file1;
-          LOG.info("Path {}", df1.path());
-          LOG.info("Partition {}", df1.partition());
-          LOG.info("LowBounds {}", df1.lowerBounds());
-          LOG.info("UpBounds {}", df1.upperBounds());
-          LOG.info("Null Count {}", df1.nullValueCounts());
-          LOG.info("Value count {}", df1.valueCounts());
-          LOG.info("nan Count{}", df1.nanValueCounts());
           if (file1.transactionId().equals(file2.transactionId())) {
             Long offset1 =
                 Conversions.fromByteBuffer(

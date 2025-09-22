@@ -132,10 +132,12 @@ public class SparkOptimizerContainer extends AbstractOptimizerContainer {
               put("spark.dynamicAllocation.minExecutors", "100");
               put("spark.executor.memoryOverhead", "4g");
               put("spark.sql.sources.v2.bucketing.enabled", "true");
-
-              put(
-                  "spark.kerberos.access.hadoopFileSystems",
-                  "viewfs://apollo-rno,viewfs://hermes-rno,hdfs://hermes-rno,hdfs://hermes-rno-ns01");
+              put("spark.yarn.preserve.staging.files", "true");
+              //
+              //              put(
+              //                  "spark.kerberos.access.hadoopFileSystems",
+              //
+              // "viewfs://apollo-rno,viewfs://hermes-rno,hdfs://hermes-rno,hdfs://hermes-rno-ns01");
 
               put("spark.sql.adaptive.skewJoin.enabled", "true");
               put("spark.executor.memory", "40g");
@@ -144,7 +146,8 @@ public class SparkOptimizerContainer extends AbstractOptimizerContainer {
               put("spark.driver.cores", "4");
               put("spark.executor.heartbeatInterval", "20s");
               put("spark.yarn.maxAppAttempts", "0");
-              put("spark.executor.cores", "2");
+              put("spark.executor.cores", "1");
+              put("spark.binary.majorVersion", "3.5.0");
 
               put("spark.sql.files.maxPartitionBytes", "1g");
               put("spark.dynamicAllocation.maxExecutors", "400");
@@ -202,11 +205,12 @@ public class SparkOptimizerContainer extends AbstractOptimizerContainer {
       if (submitMode == SubmitMode.KYUUBI) {
         LOG.info("Submit via kyuubi.");
         List<String> jobArgs =
-            Arrays.asList(super.buildOptimizerStartupArgsString(resource).split("\\s+"));
+            Arrays.asList(super.buildOptimizerStartupArgsString(resource).trim().split("\\s+"));
         LOG.info("Starting spark optimizer using kyuubi with args: {}", jobArgs);
         batchRequest.setArgs(jobArgs);
-        submitViaKyuubi(batchRequest);
-        return Maps.newHashMap();
+        Map<String, String> startupStatesMap = Maps.newHashMap();
+        startupStatesMap.put("kyuubi-batch-id", submitViaKyuubi(batchRequest));
+        return startupStatesMap;
       } else {
         String startUpArgs = this.buildOptimizerStartupArgsString(resource);
         String exportCmd = String.join(" && ", exportSystemProperties());
@@ -350,19 +354,26 @@ public class SparkOptimizerContainer extends AbstractOptimizerContainer {
   @Override
   public void releaseResource(Resource resource) {
     String releaseCommand;
-    if (deployedOnKubernetes()) {
-      releaseCommand = buildReleaseKubernetesCommand(resource);
+    LOG.info("Spark master is {}", sparkMaster);
+    if (StringUtils.isEmpty(sparkMaster)) {
+      LOG.info("Use kyuubi to release.");
+      String kyuubiId = resource.getProperties().get("kyuubi-batch-id");
+      releaseViaKyuubi(kyuubiId);
     } else {
-      releaseCommand = buildReleaseYarnCommand(resource);
-    }
-    try {
-      String exportCmd = String.join(" && ", exportSystemProperties());
-      String releaseCmd = exportCmd + " && " + releaseCommand;
-      String[] cmd = {"/bin/sh", "-c", releaseCmd};
-      LOG.info("Releasing spark optimizer using command: {}", releaseCmd);
-      Runtime.getRuntime().exec(cmd);
-    } catch (IOException e) {
-      throw new UncheckedIOException("Failed to release spark optimizer.", e);
+      if (deployedOnKubernetes()) {
+        releaseCommand = buildReleaseKubernetesCommand(resource);
+      } else {
+        releaseCommand = buildReleaseYarnCommand(resource);
+      }
+      try {
+        String exportCmd = String.join(" && ", exportSystemProperties());
+        String releaseCmd = exportCmd + " && " + releaseCommand;
+        String[] cmd = {"/bin/sh", "-c", releaseCmd};
+        LOG.info("Releasing spark optimizer using command: {}", releaseCmd);
+        Runtime.getRuntime().exec(cmd);
+      } catch (IOException e) {
+        throw new UncheckedIOException("Failed to release spark optimizer.", e);
+      }
     }
   }
 
@@ -404,8 +415,18 @@ public class SparkOptimizerContainer extends AbstractOptimizerContainer {
     return "amoro-optimizer-" + resource.getResourceId();
   }
 
-  private void submitViaKyuubi(BatchRequest batchRequest) {
+  private void releaseViaKyuubi(String batchId) {
+    try (KyuubiRestClient client = KyuubiUtil.getKyuubiClient()) {
+      BatchRestApi batchRestApi = new BatchRestApi(client);
+      batchRestApi.deleteBatch(batchId);
+    } catch (Exception e) {
+      throw new RuntimeException("Failed to create KyuubiRestClient", e);
+    }
+  }
+
+  private String submitViaKyuubi(BatchRequest batchRequest) {
     //////////////////////////////////////////////////////////////////
+    String batchId;
     try (KyuubiRestClient client = KyuubiUtil.getKyuubiClient()) {
       BatchRestApi batchRestApi = new BatchRestApi(client);
       Properties kite2Properties = new Properties();
@@ -417,7 +438,7 @@ public class SparkOptimizerContainer extends AbstractOptimizerContainer {
 
       LOG.info("Using ticket cache: {}, principal: {}", ticketCache, principal);
 
-      String batchId =
+      batchId =
           HadoopUtils.doAs(
               ticketCache,
               principal,
@@ -478,6 +499,7 @@ public class SparkOptimizerContainer extends AbstractOptimizerContainer {
     } catch (Exception e) {
       throw new RuntimeException("Failed to create KyuubiRestClient", e);
     }
+    return batchId;
   }
 
   private enum SubmitMode {

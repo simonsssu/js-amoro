@@ -93,14 +93,14 @@ public abstract class PeriodicTableScheduler extends RuntimeHandlerChain {
   }
 
   private void executeTask(DefaultTableRuntime tableRuntime) {
-    try {
-      if (isExecutable(tableRuntime)) {
-        execute(tableRuntime);
-      }
-    } finally {
-      scheduledTables.remove(tableRuntime.getTableIdentifier());
-      scheduleIfNecessary(tableRuntime, getNextExecutingTime(tableRuntime));
-    }
+    //    try {
+    //      if (isExecutable(tableRuntime)) {
+    //        execute(tableRuntime);
+    //      }
+    //    } finally {
+    //      scheduledTables.remove(tableRuntime.getTableIdentifier());
+    //      scheduleIfNecessary(tableRuntime, getNextExecutingTime(tableRuntime));
+    //    }
   }
 
   protected final void scheduleIfNecessary(

@@ -420,9 +420,15 @@ public class TableMetaStore implements Serializable {
       UserGroupInformation.setConfiguration(getConfiguration());
       SecurityUtil.setConfiguration(getConfiguration());
       try {
-        this.ugi =
-            UserGroupInformation.getUGIFromTicketCache(
-                "/opt/settings/kite2/krb5cc_cache", "b_rheos@PROD.EBAY.COM");
+        String env = System.getenv("APP_INSTANCE_NAME");
+        LOG.info("ENV --------->> {}", env);
+        if (StringUtils.isNotEmpty(env) && env.equals("amo-instance")) {
+          this.ugi =
+              UserGroupInformation.getUGIFromTicketCache(
+                  "/opt/settings/kite2/krb5cc_cache", "b_rheos@PROD.EBAY.COM");
+        } else {
+          this.ugi = UserGroupInformation.getCurrentUser();
+        }
         UserGroupInformation.setLoginUser(ugi);
       } catch (IOException e) {
         throw new RuntimeException(e);

@@ -74,10 +74,10 @@ public class TestLocal extends FlinkTestBase {
     data.add(new Object[] {1002, Map.of("alpha", "7", "beta", "88"), "2025-07-30", "02"});
     data.add(new Object[] {1002, Map.of("k1", "55", "k2", "19"), "2025-07-30", "02"});
     data.add(new Object[] {1002, Map.of("x", "42", "y", "78"), "2025-07-30", "02"});
-    data.add(new Object[] {1003, Map.of("foo", "91", "bar", "15"), "2025-07-30", "02"});
-    data.add(new Object[] {1003, Map.of("temp", "63", "hum", "30"), "2025-07-30", "02"});
-    data.add(new Object[] {1004, Map.of("alpha", "7", "beta", "88"), "2025-07-30", "02"});
-    data.add(new Object[] {1004, Map.of("k1", "55", "k2", "19"), "2025-07-30", "02"});
+    //    data.add(new Object[] {1003, Map.of("foo", "91", "bar", "15"), "2025-07-30", "02"});
+    //    data.add(new Object[] {1003, Map.of("temp", "63", "hum", "30"), "2025-07-30", "02"});
+    //    data.add(new Object[] {1004, Map.of("alpha", "7", "beta", "88"), "2025-07-30", "02"});
+    //    data.add(new Object[] {1004, Map.of("k1", "55", "k2", "19"), "2025-07-30", "02"});
 
     List<ApiExpression> rows = DataUtil.toRows(data);
 

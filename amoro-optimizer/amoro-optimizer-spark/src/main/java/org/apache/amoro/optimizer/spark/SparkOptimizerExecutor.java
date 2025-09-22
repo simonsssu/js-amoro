@@ -59,6 +59,17 @@ public class SparkOptimizerExecutor extends OptimizerExecutor {
       SparkOptimizingTaskFunction taskFunction =
           new SparkOptimizingTaskFunction(getConfig(), threadId);
       List<OptimizingTaskResult> results = jsc.parallelize(of, 1).map(taskFunction).collect();
+      List<OptimizingTaskResult> result2 =
+          jsc.parallelize(of, 1)
+              .map(
+                  t -> {
+                    try {
+                      return taskFunction.call(t);
+                    } catch (Exception e) {
+                      throw new RuntimeException(e);
+                    }
+                  })
+              .collect();
       result = results.get(0);
       LOG.info(
           "Optimizer executor[{}] executed task[{}] and cost {} ms",

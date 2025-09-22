@@ -67,6 +67,11 @@ public interface FieldMergeOperator extends BiFunction<Object, Object, Object> {
 
   Set<Type.TypeID> MAP_TYPES = Sets.newHashSet(Type.TypeID.MAP);
 
+  // provide a reversed apply for sequence Group, by default apply method
+  default Object applyReversed(Object currentValue, Object inputValue) {
+    return apply(inputValue, currentValue);
+  }
+
   abstract class AbstractFieldMergeOperator implements FieldMergeOperator {
     protected final BiFunction<Type, Object, Object> convertFromFunction;
     protected final BiFunction<Type, Object, Object> convertToFunction;
