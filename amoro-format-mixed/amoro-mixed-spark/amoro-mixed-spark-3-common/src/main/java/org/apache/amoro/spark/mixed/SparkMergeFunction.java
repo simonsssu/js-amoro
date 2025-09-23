@@ -19,12 +19,16 @@
 package org.apache.amoro.spark.mixed;
 
 import org.apache.amoro.io.reader.AbstractMergeFunction;
+import org.apache.amoro.io.reader.sequence.FieldsComparator;
+import org.apache.amoro.io.reader.sequence.ValuesComparator;
 import org.apache.amoro.shade.guava32.com.google.common.collect.Lists;
 import org.apache.amoro.shade.guava32.com.google.common.collect.Maps;
 import org.apache.amoro.table.PrimaryKeySpec;
 import org.apache.iceberg.spark.SparkSchemaUtil;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
+import org.apache.iceberg.types.Types.NestedField;
+import org.apache.iceberg.types.Types.StructType;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.util.ArrayBasedMapData;
 import org.apache.spark.sql.catalyst.util.ArrayData;
@@ -40,7 +44,9 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.BiFunction;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class SparkMergeFunction extends AbstractMergeFunction<InternalRow> {
@@ -64,6 +70,11 @@ public class SparkMergeFunction extends AbstractMergeFunction<InternalRow> {
   @Override
   public InternalRow merge(InternalRow record, InternalRow update) {
     return new UpdatedRow(record, update);
+  }
+
+  @Override
+  protected Supplier<FieldsComparator<InternalRow>> getFieldsComparator(StructType struct, int[] sequenceFields) {
+    return () -> SparkSequenceFieldsComparator.create(struct, sequenceFields);
   }
 
   class UpdatedRow extends InternalRow {
@@ -182,9 +193,22 @@ public class SparkMergeFunction extends AbstractMergeFunction<InternalRow> {
     }
 
     private Object getObject(int ordinal, DataType type) {
+      Supplier<FieldsComparator<InternalRow>> fieldsComparator = fieldToSeqComparator.get(ordinal);
       if (ordinal < originalRow.numFields() && ordinal < updateRow.numFields()) {
-        return fieldMergeOperators[ordinal].apply(
-            originalRow.get(ordinal, type), updateRow.get(ordinal, type));
+        if (Objects.isNull(fieldsComparator)) {
+          return fieldMergeOperators[ordinal].apply(
+              originalRow.get(ordinal, type), updateRow.get(ordinal, type));
+        } else {
+          // compare sequence field. if original is small then update with updateRow.
+          // otherwise keep originalRow.
+          if (fieldsComparator.get().compare(originalRow, updateRow) <= 0) {
+            return fieldMergeOperators[ordinal].apply(
+                originalRow.get(ordinal, type), updateRow.get(ordinal, type));
+          } else {
+            return fieldMergeOperators[ordinal].apply(
+                updateRow.get(ordinal, type), originalRow.get(ordinal, type));
+          }
+        }
       } else if (ordinal < originalRow.numFields()) {
         return originalRow.get(ordinal, type);
       } else {
@@ -259,6 +283,95 @@ public class SparkMergeFunction extends AbstractMergeFunction<InternalRow> {
               new GenericArrayData(keyList.toArray()), new GenericArrayData(valueList.toArray()));
         default:
           return o;
+      }
+    }
+  }
+
+  public static class SparkSequenceFieldsComparator implements FieldsComparator<InternalRow> {
+
+    private final int[] sequenceFields;
+
+    private final StructType struct;
+
+    private List<ValuesComparator<InternalRow>> comparators = Lists.newArrayList();
+
+    private SparkSequenceFieldsComparator(StructType struct, int[] sequenceFields) {
+      this.sequenceFields = sequenceFields;
+      this.struct = struct;
+      createValueComparator(struct, sequenceFields);
+    }
+
+    public static SparkSequenceFieldsComparator create(StructType struct, int[] sequenceFields) {
+      if (sequenceFields.length == 0) {
+        return null;
+      }
+      return new SparkSequenceFieldsComparator(struct, sequenceFields);
+    }
+
+    @Override
+    public int[] compareFields() {
+      return sequenceFields;
+    }
+
+    @Override
+    public int compare(InternalRow o1, InternalRow o2) {
+      for (ValuesComparator<InternalRow> comparator: comparators) {
+        int res = comparator.compare(o1, o2);
+        if (res == 0) continue;
+        return res;
+      }
+      return 0;
+    }
+
+    private void createValueComparator(StructType struct, int[] sequenceFields) {
+      for (int seqIndex: sequenceFields) {
+        NestedField seqField = struct.field(seqIndex);
+        comparators.add(SparkValuesComparator.create(seqField.fieldId(), seqField.type()));
+      }
+    }
+  }
+
+  public static class SparkValuesComparator extends ValuesComparator<InternalRow> {
+
+    public static ValuesComparator<InternalRow> create(int seqFieldIndex, Type fieldType) {
+      return new SparkValuesComparator(seqFieldIndex, fieldType);
+    }
+
+    private SparkValuesComparator(int seqFieldIndex, Type fieldType) {
+      super(seqFieldIndex, fieldType);
+    }
+
+    @Override
+    public int compare(InternalRow o1, InternalRow o2) {
+      // Iceberg start from 1 while InternalRow start from 0.
+      int fieldIndex = seqFieldIndex - 1;
+      switch (fieldType.typeId()) {
+        case BOOLEAN:
+          return compare(o1.getBoolean(fieldIndex), o2.getBoolean(fieldIndex), Boolean::compareTo);
+        case INTEGER:
+        case DATE:
+          return compare(o1.getInt(fieldIndex), o2.getInt(fieldIndex), Integer::compareTo);
+        case LONG:
+        case TIME:
+        case TIMESTAMP:
+          return compare(o1.getLong(fieldIndex), o2.getLong(fieldIndex), Long::compareTo);
+        case FLOAT:
+          return compare(o1.getFloat(fieldIndex), o2.getFloat(fieldIndex), Float::compareTo);
+        case DOUBLE:
+          return compare(o1.getDouble(fieldIndex), o2.getDouble(fieldIndex), Double::compareTo);
+        case STRING:
+          return compare(o1.getUTF8String(fieldIndex), o2.getUTF8String(fieldIndex), UTF8String::compare);
+        case BINARY:
+        case FIXED:
+          return compare(o1.getBinary(fieldIndex), o2.getBinary(fieldIndex), Arrays::compare);
+        case DECIMAL:
+          return compare(
+              o1.getDecimal(fieldIndex, ((Types.DecimalType) fieldType).precision(), ((Types.DecimalType) fieldType).scale()),
+              o2.getDecimal(fieldIndex, ((Types.DecimalType) fieldType).precision(), ((Types.DecimalType) fieldType).scale()),
+              Decimal::compare);
+        default:
+          throw new UnsupportedOperationException(
+              "Unsupported sequence field type:" + fieldType);
       }
     }
   }

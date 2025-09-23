@@ -19,6 +19,7 @@
 package org.apache.amoro.io.reader;
 
 import org.apache.amoro.io.AuthenticatedFileIO;
+import org.apache.amoro.io.reader.sequence.FieldsComparator;
 import org.apache.amoro.table.PrimaryKeySpec;
 import org.apache.amoro.utils.map.StructLikeCollections;
 import org.apache.iceberg.Schema;
@@ -32,6 +33,7 @@ import org.apache.iceberg.orc.OrcRowReader;
 import org.apache.iceberg.parquet.ParquetValueReader;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
+import org.apache.iceberg.types.Types.StructType;
 import org.apache.iceberg.util.DateTimeUtil;
 import org.apache.orc.TypeDescription;
 import org.apache.parquet.schema.MessageType;
@@ -44,6 +46,7 @@ import java.time.OffsetDateTime;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 public class GenericMergeDataReader extends AbstractMergeDataReader<Record> {
 
@@ -127,6 +130,12 @@ public class GenericMergeDataReader extends AbstractMergeDataReader<Record> {
         }
       }
       return updatedRecord;
+    }
+
+    @Override
+    protected Supplier<FieldsComparator<Record>> getFieldsComparator(StructType struct,
+        int[] sequenceFields) {
+      return null;
     }
   }
 
