@@ -170,7 +170,7 @@ public class FlinkTestBase extends TableTestBase {
           env = StreamExecutionEnvironment.getExecutionEnvironment(c);
           env.setParallelism(1);
           env.getCheckpointConfig().setCheckpointingMode(CheckpointingMode.EXACTLY_ONCE);
-          env.getCheckpointConfig().setCheckpointInterval(300);
+          env.getCheckpointConfig().setCheckpointInterval(3000);
 
           env.getCheckpointConfig()
               .enableExternalizedCheckpoints(

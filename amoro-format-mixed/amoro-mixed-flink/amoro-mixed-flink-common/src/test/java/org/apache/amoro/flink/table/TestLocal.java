@@ -23,6 +23,7 @@ import static org.apache.flink.table.api.DataTypes.FIELD;
 import static org.apache.flink.table.api.DataTypes.MAP;
 import static org.apache.flink.table.api.DataTypes.STRING;
 
+import java.util.Properties;
 import org.apache.amoro.BasicTableTestHelper;
 import org.apache.amoro.TableFormat;
 import org.apache.amoro.TableTestHelper;
@@ -34,6 +35,10 @@ import org.apache.flink.table.api.ApiExpression;
 import org.apache.flink.table.api.DataTypes;
 import org.apache.flink.table.api.Table;
 import org.apache.flink.types.Row;
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -65,6 +70,11 @@ public class TestLocal extends FlinkTestBase {
   }
 
   @Test
+  public void testIntoPG() {
+
+  }
+
+  @Test
   public void testAMSLocalPartialUpdate() {
 
     List<Object[]> data = new LinkedList<>();
@@ -93,6 +103,32 @@ public class TestLocal extends FlinkTestBase {
 
     getTableEnv().createTemporaryView("input", input);
 
+    sql("CREATE TABLE kafka_source (\n"
+        + "    itemId STRING,\n"
+        + "    basicMap MAP<STRING, STRING>,\n"
+        + "    dt STRING,\n"
+        + "    hr STRING\n"
+        + ") WITH (\n"
+        + "    'connector' = 'kafka',\n"
+        + "    'topic' = 'to2',\n"
+        + "    'properties.bootstrap.servers' = 'localhost:9092',\n"
+        + "    'properties.group.id' = 'flink-consumer-group',\n"
+        + "    'scan.startup.mode' = 'earliest-offset', \n"
+        + "    'format' = 'json'\n"
+        + ");");
+
+//    sql(  "CREATE TABLE print_table (\n" +
+//        "    item_id STRING,\n" +
+//        "    basic_map MAP<STRING, STRING>,\n" +
+//        "    dt STRING,\n" +
+//        "    hr STRING\n" +
+//        ") WITH (\n" +
+//        "    'connector' = 'print'\n" +
+//        ")");
+
+//    sql("insert into print_table select * from kafka_source");
+
+
     sql(
         "CREATE CATALOG mixed_catalog WITH (\n"
             + "\t'type' = 'mixed_iceberg',\n"
@@ -103,27 +139,35 @@ public class TestLocal extends FlinkTestBase {
             + ");");
 
     final String dbname = "db_name1";
-    final String tbname = "partial_sinkt2";
+    final String tbname = "t5";
 
     sql(
         "insert into mixed_catalog."
             + dbname
             + "."
             + tbname
-            + " select item_id, basic_map, dt, hr from input");
+            + " select cast(itemId as bigint), basicMap, dt, hr from kafka_source");
 
-    List<Row> actual =
-        sql(
-            "select * from mixed_catalog."
-                + dbname
-                + "."
-                + tbname
-                + "/*+ OPTIONS('streaming'='false', 'scan.startup.mode'='earliest')*/");
-
-    actual.stream()
-        .forEach(
-            f -> {
-              System.out.println("--> " + f);
-            });
   }
+
+
+  public static class TestData {
+    private final long itemId;
+    private final Map<String, String> basicMap;
+    private final String dt;
+    private final String hr;
+
+    public TestData(long itemId, Map<String, String> basicMap, String dt, String hr) {
+      this.itemId = itemId;
+      this.basicMap = basicMap;
+      this.dt = dt;
+      this.hr = hr;
+    }
+
+    public long getItemId() { return itemId; }
+    public Map<String, String> getBasicMap() { return basicMap; }
+    public String getDt() { return dt; }
+    public String getHr() { return hr; }
+  }
+
 }

@@ -39,7 +39,7 @@ public abstract class AbstractMergeFunction<T> implements MergeFunction<T> {
       Map<String, String> properties,
       BiFunction<Type, Object, Object> convertFromFunction,
       BiFunction<Type, Object, Object> convertToFunction) {
-    createSequenceFieldsComparator(struct, properties);
+//    createSequenceFieldsComparator(struct, properties);
     String mergeFunction =
         PropertyUtil.propertyAsString(
             properties, TableProperties.MERGE_FUNCTION, TableProperties.MERGE_FUNCTION_DEFAULT);
@@ -56,13 +56,13 @@ public abstract class AbstractMergeFunction<T> implements MergeFunction<T> {
         throw new UnsupportedOperationException("Unsupported merge function:" + mergeFunction);
     }
   }
-
-  private void createSequenceFieldsComparator(Types.StructType struct, Map<String, String> properties) {
-    properties.entrySet().stream()
-        .filter(e -> e.getKey().startsWith(FIELD_PREFIX) && e.getKey().endsWith(SEQUENCE_FIELDS))
-        .forEach(e -> {
-
-          int[] sequenceFieldIndexes =
-        });
-  }
+//
+//  private void createSequenceFieldsComparator(Types.StructType struct, Map<String, String> properties) {
+//    properties.entrySet().stream()
+//        .filter(e -> e.getKey().startsWith(FIELD_PREFIX) && e.getKey().endsWith(SEQUENCE_FIELDS))
+//        .forEach(e -> {
+//
+//          int[] sequenceFieldIndexes =
+//        });
+//  }
 }
